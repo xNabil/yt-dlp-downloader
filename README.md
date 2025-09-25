@@ -1,7 +1,4 @@
 # yt-dlp-downloader
-
-A simple, interactive, and user-friendly Python script to download YouTube videos and playlists as videos (MP4), audios (MP3), or with advanced custom options. This project wraps the powerful [yt-dlp](https://github.com/yt-dlp/yt-dlp) tool into a clean terminal interface, so you don't need to remember or type long yt-dlp commands.
-
 ---
 
 ## Features
