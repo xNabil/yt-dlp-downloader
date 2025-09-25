@@ -10,14 +10,6 @@ setlocal
 
 echo Starting YT-DLP Downloader...
 echo.
-
-:: Activate virtual environment if it exists
-if exist venv\Scripts\activate.bat (
-    call venv\Scripts\activate.bat
-) else (
-    echo Warning: Virtual environment not found. Using global Python.
-)
-
 :: Run the script
 python main.py
 if %errorlevel% neq 0 (
