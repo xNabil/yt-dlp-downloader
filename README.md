@@ -1,148 +1,169 @@
 # yt-dlp-downloader
+
+A simple, interactive, and user-friendly Python script to download YouTube videos and playlists as videos (MP4), audios (MP3), or with advanced custom options. This project wraps the powerful [yt-dlp](https://github.com/yt-dlp/yt-dlp) tool into a clean terminal interface, so you don't need to remember or type long yt-dlp commands.
+
+![yt-dlp-downloader screenshot](docs/screenshot.png) <!-- Add a screenshot to docs/screenshot.png if you have one -->
+
 ---
 
 ## Features
 
-- **Download YouTube videos or entire playlists** as MP4 (video) or MP3 (audio)
-- **Interactive menus** for quality selection (360p, 720p, 1080p, etc.), audio bitrate, and advanced yt-dlp formats
-- **Progress bars** (with [tqdm](https://pypi.org/project/tqdm/)) for each download, including playlists
-- **Colored terminal output** using [colorama](https://pypi.org/project/colorama/)
-- **Downloads are saved in your `~/Downloads/YT-DLP/Videos` or `~/Downloads/YT-DLP/Audios` directories**
-- **No need to remember yt-dlp command-line arguments**
-- **FFmpeg check**: Warns you if ffmpeg is not installed
-- **Automatic config file**: Remembers your last used options (in `~/.yt_dlp_config.json`)
-- **Safe and clean filenames** for downloaded files
-- **Extensible**: Easy to add more features or options
+- **Download YouTube videos** as MP4, MP3, or with advanced custom options.
+- **Interactive, menu-driven terminal UI** — no need to type long yt-dlp commands.
+- **Batch downloads** for playlists or multiple videos.
+- **Custom output formats, quality, and more.**
+- **Easy to use:** Just run and follow the prompts.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Setup Instructions (Manual & Automated)](#setup-instructions-manual--automated)
+  - [1. Install Python](#1-install-python)
+  - [2. Install FFmpeg (and Add to PATH)](#2-install-ffmpeg-and-add-to-path)
+  - [3. Install yt-dlp-downloader Dependencies](#3-install-yt-dlp-downloader-dependencies)
+  - [4. Run the Script](#4-run-the-script)
+  - [Automated Setup (Windows)](#automated-setup-windows)
+- [Usage](#usage)
+- [File Descriptions](#file-descriptions)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ---
 
 ## Requirements
 
+- **Windows** (Batch scripts provided; works on other OS with minor adjustments)
 - **Python 3.7+**
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (`pip install yt-dlp`)
-- [colorama](https://pypi.org/project/colorama/) (`pip install colorama`)
-- [tqdm](https://pypi.org/project/tqdm/) (`pip install tqdm`)
-- **ffmpeg** installed and available in your system PATH (for audio extraction and merging)
+- **FFmpeg** (for audio/video conversion, merging, etc.)
+- **yt-dlp** (will be installed automatically)
+- Internet access
 
-Install dependencies with:
+---
 
-```bash
-pip install yt-dlp colorama tqdm
-```
+## Setup Instructions (Manual & Automated)
 
-On Linux/macOS, you can install `ffmpeg` via your package manager. On Windows, download from [ffmpeg.org](https://ffmpeg.org/download.html) and add it to your PATH.
+### 1. Install Python
+
+- Download and install Python 3.7 or newer from [python.org/downloads](https://www.python.org/downloads/).
+- During installation, **check the box "Add Python to PATH"**.
+
+### 2. Install FFmpeg (and Add to PATH)
+
+**FFmpeg** is required for video/audio processing.
+
+#### a. Download FFmpeg
+
+- Go to [ffmpeg.org/download.html](https://ffmpeg.org/download.html)
+- For Windows, click on "Windows" and choose a build (e.g., [gyan.dev builds](https://www.gyan.dev/ffmpeg/builds/)).
+- Download the latest **release full build** as a ZIP file.
+
+#### b. Extract and Add to PATH
+
+1. Extract the ZIP file (e.g., to `C:\ffmpeg`).
+2. Inside the extracted folder, locate the `bin` directory (e.g., `C:\ffmpeg\bin`).
+3. **Add `C:\ffmpeg\bin` to your Windows PATH:**
+   - Press `Win + S`, type "Environment Variables", and select "Edit the system environment variables".
+   - Click "Environment Variables".
+   - Under "System variables", select "Path" and click "Edit".
+   - Click "New" and add the path to your FFmpeg `bin` folder (e.g., `C:\ffmpeg\bin`).
+   - Click OK on all dialogs.
+
+4. **Verify installation:**
+   - Open a new terminal/command prompt and run:
+     ```
+     ffmpeg -version
+     ```
+   - If you see version info, you're set!
+
+### 3. Install yt-dlp-downloader Dependencies
+
+- Open a terminal/command prompt in the project folder.
+- Run:
+  ```
+  pip install -r requirements.txt
+  ```
+  This will install `yt-dlp` and any other dependencies.
+
+### 4. Run the Script
+
+- **Windows:**
+  - Double-click `run.bat` or run in terminal:
+    ```
+    python main.py
+    ```
+
+- **Linux/macOS:**
+  - Run:
+    ```
+    python3 main.py
+    ```
+
+---
+
+### Automated Setup (Windows)
+
+- **setup.bat:**  
+  Just double-click `setup.bat` to:
+  - Automatically install Python dependencies
+  - Download and install yt-dlp
+  - Optionally help install FFmpeg (if scripted)
+  - Prepare everything for you
+  
+  > **Note:** You may still need to manually install FFmpeg and add it to your PATH if not fully automated by the script.
+
+- **run.bat:**  
+  Double-click to launch the downloader with one click.
 
 ---
 
 ## Usage
 
-1. **Clone this repository or download `main.py`.**
-2. **Run the script:**
-
-    ```bash
-    python3 main.py
-    ```
-
-3. **Follow the interactive prompts:**
-    - Paste one or more YouTube video/playlist links.
-    - Choose download type: Video (MP4), Audio (MP3), or Advanced (custom yt-dlp format).
-    - Select video or audio quality, or set advanced options.
-    - Approve the pre-download summary.
-    - Watch your downloads with real-time progress bars!
+1. **Launch the downloader:**  
+   - Run `run.bat` or execute `python main.py`.
+2. **Follow the on-screen prompts:**  
+   - Enter the YouTube link(s), select output format (video/audio), quality, and other options.
+3. **Wait for download and processing to complete.**
+4. **Your files will be saved in the specified output directory.**
 
 ---
 
-## Example Session
+## File Descriptions
 
-```
-Enter YouTube video or playlist links (separated by space):
-➤ https://www.youtube.com/watch?v=dQw4w9WgXcQ
-
-Choose download type:
-1. Video (MP4)
-2. Audio (MP3 / other)
-3. Advanced (custom format & options)
-➤ Enter choice (1-3, default: 1):
-
-Available video qualities:
-1. Best Quality available
-2. 360p
-3. 480p
-4. 720p (SD)
-5. 1080p (FHD)
-...
-➤ Select quality (1-7, default: best):
-
-========================
---- Download Info ---
-========================
-Title: Rick Astley - Never Gonna Give You Up ...
-Uploader: RickAstleyVEVO
-Duration: 00:03:32
-Chosen format: 720p
-Size: 12.34 MiB
-Destination: /home/user/Downloads/YT-DLP/Videos/Rick Astley - Never Gonna Give You Up (720p).mp4
-➤ Proceed? (y/n):
-```
-
----
-
-## Why use this script?
-
-- **No need to memorize yt-dlp commands!**
-- Handles playlists, quality selection, and file naming for you.
-- Clean, color-coded output and real-time progress.
-- One file, no external GUIs, just Python and a terminal.
-
----
-
-## Configuration
-
-- The script stores your last used settings (quality, type, etc.) in `~/.yt_dlp_config.json`.
-- Downloaded files are saved in `~/Downloads/YT-DLP/Videos` (videos) or `~/Downloads/YT-DLP/Audios` (audio) by default.
-
----
-
-## Customization
-
-You can easily modify `main.py` to:
-- Change default download folders
-- Add support for other sites supported by yt-dlp
-- Add post-processing or notifications
+- **main.py** — The main Python script; entry point for the downloader.
+- **requirements.txt** — Lists required Python packages (yt-dlp, etc).
+- **setup.bat** — Automates initial setup: installs dependencies, may help with FFmpeg/yt-dlp setup.
+- **run.bat** — Launches the downloader easily.
+- **README.md** — This file.
+- **docs/** — (Optional) Screenshots or documentation.
 
 ---
 
 ## Troubleshooting
 
-- **FFmpeg not found?**  
-  Make sure `ffmpeg` is installed and available in your system PATH.
+- **FFmpeg not found error:**  
+  Ensure FFmpeg is installed and the `bin` folder is in your PATH. Close and reopen your terminal after adding to PATH.
 
-- **Corrupted config file?**  
-  The script will reset options to default if `~/.yt_dlp_config.json` is invalid.
+- **yt-dlp not found:**  
+  Make sure `pip install -r requirements.txt` ran successfully.
 
-- **Issues with certain links?**  
-  Some videos may be region-locked or age-restricted; yt-dlp may need extra options.
+- **Permission errors:**  
+  Try running your terminal as administrator.
+
+- **Still stuck?**  
+  Open an issue on [GitHub Issues](https://github.com/xNabil/yt-dlp-downloader/issues).
 
 ---
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
 ## Credits
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) for the actual downloading
-- [colorama](https://pypi.org/project/colorama/) for colored output
-- [tqdm](https://pypi.org/project/tqdm/) for pretty progress bars
-
----
-
-## Contribution
-
-Pull requests are welcome for bugfixes, features, and improvements!
-
----
-
-**Happy downloading!**
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+- [FFmpeg](https://ffmpeg.org/)
