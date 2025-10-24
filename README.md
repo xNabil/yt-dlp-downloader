@@ -40,6 +40,15 @@ A simple, interactive, and user-friendly Python script to download YouTube video
 - **run.bat:**  
   Double-click to launch the downloader with one click.
 
+## 🔧 Configuration (Optional .env)
+
+You can control where your downloads and configuration file are stored by using `.env` file.
+```.env
+# Base directory for all downloads and config
+# Comment this out to use the defaults under your home directory
+BASE_DIR_PATH=C:\Users\YourUser\MyDownloads 
+```
+
 ---
 ### Manual Installation 
 
