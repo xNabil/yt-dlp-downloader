@@ -13,15 +13,62 @@ import time
 # Initialize colorama for colored terminal output
 init(autoreset=True)
 
-# Define directories
+# -----------------------------------------------------------------------------
+# .env support (DOWNLOAD_PATH)
+# -----------------------------------------------------------------------------
 HOME = Path.home()
-VIDEO_DIR = HOME / "Downloads" / "YT-DLP" / "Videos"
-AUDIO_DIR = HOME / "Downloads" / "YT-DLP" / "Audios"
-CONFIG_FILE = HOME / ".yt_dlp_config.json"
+
+def _load_download_path_from_env_file():
+    """
+    Load DOWNLOAD_PATH from a .env file placed either:
+    - alongside this script, or
+    - in HOME (as ~/.env)
+
+    The file should contain a line like:
+      DOWNLOAD_PATH=/absolute/or/~/expanded/path
+
+    Returns a Path or None if not set/empty/invalid.
+    """
+    candidates = [
+        Path(__file__).resolve().parent / ".env",
+        HOME / ".env",
+    ]
+    for env_file in candidates:
+        if env_file.exists():
+            try:
+                for raw in env_file.read_text(encoding="utf-8").splitlines():
+                    line = raw.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip().strip('"').strip("'")
+                    if key == "DOWNLOAD_PATH":
+                        if val:
+                            return Path(os.path.expanduser(val)).resolve()
+                        return None
+            except Exception:
+                # Ignore malformed .env
+                return None
+    return None
+
+# Determine base directory from .env or use defaults
+_ENV_BASE = _load_download_path_from_env_file()
+if _ENV_BASE:
+    BASE_DIR = _ENV_BASE
+    VIDEO_DIR = BASE_DIR / "Videos"
+    AUDIO_DIR = BASE_DIR / "Audios"
+    CONFIG_FILE = BASE_DIR / ".yt_dlp_config.json"
+else:
+    BASE_DIR = HOME / "Downloads" / "YT-DLP"
+    VIDEO_DIR = BASE_DIR / "Videos"
+    AUDIO_DIR = BASE_DIR / "Audios"
+    CONFIG_FILE = BASE_DIR / ".yt_dlp_config.json"
 
 # Ensure directories exist
 VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Check if ffmpeg is available
 def check_ffmpeg():
@@ -44,7 +91,7 @@ def load_config():
     }
     if CONFIG_FILE.exists():
         try:
-            with open(CONFIG_FILE, 'r') as f:
+            with open(CONFIG_FILE, 'r', encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
             print(f"{Fore.RED}Error: Corrupted config file. Using default settings.{Style.RESET_ALL}")
@@ -52,7 +99,7 @@ def load_config():
 
 # Clean filename to be filesystem-safe
 def clean_filename(title):
-    return re.sub(r'[<>:"/\\|?*]', '', title).strip()[:200]  # Basic cleaning, consider pathvalidate for more robustness
+    return re.sub(r'[<>:"/\\|?*]', '', title).strip()[:200]  # Basic cleaning
 
 # Get video info using yt-dlp
 def get_video_info(url):
@@ -148,17 +195,27 @@ def show_pre_download_info(info, format_info, dest_path, quality):
 # Progress bar for downloads
 def create_progress_bar(total_size_mb, title):
     if total_size_mb and total_size_mb > 0:
-        # Use actual file size if available
-        return tqdm(total=total_size_mb, desc=f"{Fore.GREEN}Downloading {title[:30]}{Style.RESET_ALL}", unit="MiB", bar_format="{l_bar}{bar}| {n:.1f}/{total:.1f} MiB [{elapsed}<{remaining}, {postfix}]")
+        return tqdm(
+            total=total_size_mb,
+            desc=f"{Fore.GREEN}Downloading {title[:30]}{Style.RESET_ALL}",
+            unit="MiB",
+            bar_format="{l_bar}{bar}| {n:.1f}/{total:.1f} MiB [{elapsed}<{remaining}, {postfix}]"
+        )
     else:
-        # Fallback to percentage-based progress bar
-        return tqdm(total=100, desc=f"{Fore.GREEN}Downloading {title[:30]}{Style.RESET_ALL}", unit="%", bar_format="{l_bar}{bar}| {n:.1f}% [{elapsed}<{remaining}, {postfix}]")
+        return tqdm(
+            total=100,
+            desc=f"{Fore.GREEN}Downloading {title[:30]}{Style.RESET_ALL}",
+            unit="%",
+            bar_format="{l_bar}{bar}| {n:.1f}% [{elapsed}<{remaining}, {postfix}]"
+        )
 
+# -------------------------------
 # Download video
+# -------------------------------
 def download_video(url, quality, config):
     if not check_ffmpeg():
         return False
-    
+
     # Determine if URL is a playlist
     with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'extract_flat': True}) as ydl:
         try:
@@ -167,19 +224,26 @@ def download_video(url, quality, config):
         except yt_dlp.DownloadError as e:
             print(f"{Fore.RED}Error: Invalid link {url} - {str(e)}{Style.RESET_ALL}")
             return False
-    
-    format_str = "bestvideo+bestaudio/best" if quality == "best" else f"bv*[height<={quality[:-1]}]+ba/best"
-    format_display = quality if quality != "best" else "best"
-    
+
+    # Robust format selection for MP4 merge and quality cap
+    if quality == "best":
+        format_str = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
+        format_display = "best"
+    else:
+        cap = int(quality[:-1])  # e.g., "1080p" -> 1080
+        format_str = f"bestvideo[height<={cap}][ext=mp4]+bestaudio[ext=m4a]/best[height<={cap}][ext=mp4]/best"
+        format_display = quality
+
     if is_playlist:
         playlist_title = flat_info.get('title', 'Unknown Playlist')
-        num_videos = len(flat_info['entries'])
+        num_videos = len(flat_info.get('entries') or [])
         print(f"{Fore.BLUE}🎥 Playlist: {playlist_title}{Style.RESET_ALL}")
         print(f"{Fore.BLUE}📋 Number of videos: {num_videos}{Style.RESET_ALL}")
         if input(f"{Fore.CYAN}➤ Proceed with downloading playlist? (y/n): {Style.RESET_ALL}").strip().lower() != 'y':
             return False
-        output_filename = "%(title)s (%(height)sp).%(ext)s"
-        output_path = VIDEO_DIR / output_filename
+        # Use playlist folder + index prefix in filename
+        output_filename = "%(playlist_index)s %(title)s (%(height)sp).%(ext)s"
+        output_path = VIDEO_DIR / "%(playlist_title)s" / output_filename
         pbar = None
         video_count = 0
     else:
@@ -195,11 +259,11 @@ def download_video(url, quality, config):
             except yt_dlp.DownloadError as e:
                 print(f"{Fore.RED}Error fetching info for {url}: {str(e)}. Falling back to best available.{Style.RESET_ALL}")
                 ydl_opts_info['format'] = 'bestvideo+bestaudio/best'
-                with yt_dlp.YoutubeDL(ydl_opts_info) as ydl_info:
-                    info = ydl_info.extract_info(url, download=False)
+                with yt_dlp.YoutubeDL(ydl_opts_info) as ydl_info2:
+                    info = ydl_info2.extract_info(url, download=False)
                 format_str = 'bestvideo+bestaudio/best'
                 format_display = "best"
-        
+
         if not info:
             return False
         title = clean_filename(info['title'])
@@ -207,22 +271,21 @@ def download_video(url, quality, config):
         quality_display = f"{height}p" if height and format_display == "best" else format_display
         output_filename = f"{title} ({quality_display}).%(ext)s"
         output_path = VIDEO_DIR / output_filename
-        
+
         if not show_pre_download_info(info, quality_display, str(output_path), quality):
             return False
         total_size_mb = (info.get('filesize') or info.get('filesize_approx') or 0) / (1024 * 1024)
         pbar = create_progress_bar(total_size_mb, title)
         video_count = 0
-    
+
     last_update = 0
     last_bytes = 0
     current_title = ""
-    
+
     def progress_hook(d):
         nonlocal pbar, last_update, last_bytes, current_title, video_count
         current_time = time.time()
         if d['status'] == 'downloading':
-            # Get current video title
             title = d.get('info_dict', {}).get('title', 'Unknown')
             total_size_mb = (d.get('info_dict', {}).get('filesize') or d.get('info_dict', {}).get('filesize_approx') or 0) / (1024 * 1024)
             if title != current_title:
@@ -232,29 +295,25 @@ def download_video(url, quality, config):
                 current_title = title
                 desc = f"Video {video_count}/{num_videos}: {title[:30]}" if is_playlist else title[:30]
                 pbar = create_progress_bar(total_size_mb, desc)
-            
-            # Update every 0.1 seconds
+
             if current_time - last_update >= 0.1:
-                # Strip ANSI codes from _percent_str
                 percent_str = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', d.get('_percent_str', '0%')).strip('%')
                 try:
                     percent = float(percent_str)
                 except ValueError:
                     percent = 0.0
-                # Calculate downloaded size in MiB
                 downloaded_bytes = d.get('downloaded_bytes', 0)
                 downloaded_mb = downloaded_bytes / (1024 * 1024)
-                # Calculate speed manually
                 time_delta = current_time - last_update if last_update else 0.1
                 speed_mb_s = (downloaded_bytes - last_bytes) / (1024 * 1024 * time_delta) if time_delta > 0 else 0.0
                 last_bytes = downloaded_bytes
                 last_update = current_time
-                # Update progress bar
+
                 if pbar and pbar.total > 0 and total_size_mb > 0:
                     pbar.n = downloaded_mb
                 elif pbar:
                     pbar.n = percent
-                # Update postfix with ETA and speed
+
                 eta = d.get('eta', 'Unknown')
                 eta_str = f"ETA {time.strftime('%M:%S', time.gmtime(eta))}" if eta != 'Unknown' else 'ETA Unknown'
                 if pbar:
@@ -275,12 +334,26 @@ def download_video(url, quality, config):
         'format': format_str,
         'outtmpl': str(output_path),
         'merge_output_format': 'mp4',
-        'nopostoverwrites': True,  # Prevent overwriting during post-processing
+        'nopostoverwrites': True,
         'ffmpeg_location': None,
         'quiet': True,
         'no_warnings': True,
         'progress_hooks': [progress_hook],
-        'paths': {'home': str(VIDEO_DIR), 'temp': str(VIDEO_DIR)}
+        'paths': {'home': str(VIDEO_DIR), 'temp': str(VIDEO_DIR)},
+        # Stability for playlists and speedups
+        'noplaylist': False,
+        'ignoreerrors': True,
+        'retries': 10,
+        'fragment_retries': 10,
+        # Concurrent fragment downloads (CLI -N)
+        'concurrent_fragment_downloads': 5,
+        # Use aria2c for multi-connection downloads
+        'external_downloader': 'aria2c',
+        'external_downloader_args': {
+            'aria2c': ['-x', '16', '-s', '16', '-k', '1M']
+        },
+        # Optimize MP4 playback start
+        'postprocessor_args': ['-movflags', 'faststart'],
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -297,18 +370,20 @@ def download_video(url, quality, config):
                 filename = VIDEO_DIR / f"{title} ({info.get('height', 'best')}p).mp4"
                 print(f"{Fore.GREEN}✅ Download complete: {filename}{Style.RESET_ALL}")
                 return True
-            except yt_dlp.DownloadError as e:
-                print(f"{Fore.RED}Failed to download {url}: {str(e)}{Style.RESET_ALL}")
+            except yt_dlp.DownloadError as e2:
+                print(f"{Fore.RED}Failed to download {url}: {str(e2)}{Style.RESET_ALL}")
                 return False
         else:
             print(f"{Fore.RED}Error downloading playlist {url}: {str(e)}{Style.RESET_ALL}")
             return False
 
+# -------------------------------
 # Download audio
+# -------------------------------
 def download_audio(url, audio_quality, config):
     if not check_ffmpeg():
         return False
-    
+
     # Check if URL is a playlist
     with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'extract_flat': True}) as ydl:
         try:
@@ -317,18 +392,19 @@ def download_audio(url, audio_quality, config):
         except yt_dlp.DownloadError as e:
             print(f"{Fore.RED}Error: Invalid link {url} - {str(e)}{Style.RESET_ALL}")
             return False
-    
+
     quality_display = f"{audio_quality}kbps" if audio_quality != "best" else "320kbps"
-    
+
     if is_playlist:
         playlist_title = flat_info.get('title', 'Unknown Playlist')
-        num_videos = len(flat_info['entries'])
+        num_videos = len(flat_info.get('entries') or [])
         print(f"{Fore.BLUE}🎵 Playlist: {playlist_title}{Style.RESET_ALL}")
         print(f"{Fore.BLUE}📋 Number of videos: {num_videos}{Style.RESET_ALL}")
         if input(f"{Fore.CYAN}➤ Proceed with downloading playlist? (y/n): {Style.RESET_ALL}").strip().lower() != 'y':
             return False
-        output_filename = f"%(title)s ({quality_display}).mp3"
-        output_path = AUDIO_DIR / output_filename
+        # Playlist folder + index prefix
+        output_filename = f"%(playlist_index)s %(title)s ({quality_display}).mp3"
+        output_path = AUDIO_DIR / "%(playlist_title)s" / output_filename
         pbar = None
         video_count = 0
     else:
@@ -350,25 +426,24 @@ def download_audio(url, audio_quality, config):
             except yt_dlp.DownloadError as e:
                 print(f"{Fore.RED}Error: Invalid link {url} - {str(e)}{Style.RESET_ALL}")
                 return False
-        
+
         title = clean_filename(info['title'])
         output_path = AUDIO_DIR / f"{title} ({quality_display}).mp3"
-        
+
         if not show_pre_download_info(info, f"mp3 ({quality_display})", str(output_path), audio_quality):
             return False
         total_size_mb = (info.get('filesize') or info.get('filesize_approx') or 0) / (1024 * 1024)
         pbar = create_progress_bar(total_size_mb, title)
         video_count = 0
-    
+
     last_update = 0
     last_bytes = 0
     current_title = ""
-    
+
     def progress_hook(d):
         nonlocal pbar, last_update, last_bytes, current_title, video_count
         current_time = time.time()
         if d['status'] == 'downloading':
-            # Get current video title
             title = d.get('info_dict', {}).get('title', 'Unknown')
             total_size_mb = (d.get('info_dict', {}).get('filesize') or d.get('info_dict', {}).get('filesize_approx') or 0) / (1024 * 1024)
             if title != current_title:
@@ -378,29 +453,25 @@ def download_audio(url, audio_quality, config):
                 current_title = title
                 desc = f"Audio {video_count}/{num_videos}: {title[:30]}" if is_playlist else title[:30]
                 pbar = create_progress_bar(total_size_mb, desc)
-            
-            # Update every 0.1 seconds
+
             if current_time - last_update >= 0.1:
-                # Strip ANSI codes from _percent_str
                 percent_str = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', d.get('_percent_str', '0%')).strip('%')
                 try:
                     percent = float(percent_str)
                 except ValueError:
                     percent = 0.0
-                # Calculate downloaded size in MiB
                 downloaded_bytes = d.get('downloaded_bytes', 0)
                 downloaded_mb = downloaded_bytes / (1024 * 1024)
-                # Calculate speed manually
                 time_delta = current_time - last_update if last_update else 0.1
                 speed_mb_s = (downloaded_bytes - last_bytes) / (1024 * 1024 * time_delta) if time_delta > 0 else 0.0
                 last_bytes = downloaded_bytes
                 last_update = current_time
-                # Update progress bar
+
                 if pbar and pbar.total > 0 and total_size_mb > 0:
                     pbar.n = downloaded_mb
                 elif pbar:
                     pbar.n = percent
-                # Update postfix with ETA and speed
+
                 eta = d.get('eta', 'Unknown')
                 eta_str = f"ETA {time.strftime('%M:%S', time.gmtime(eta))}" if eta != 'Unknown' else 'ETA Unknown'
                 if pbar:
@@ -429,7 +500,19 @@ def download_audio(url, audio_quality, config):
         'quiet': True,
         'no_warnings': True,
         'progress_hooks': [progress_hook],
-        'paths': {'home': str(AUDIO_DIR), 'temp': str(AUDIO_DIR)}
+        'paths': {'home': str(AUDIO_DIR), 'temp': str(AUDIO_DIR)},
+        # Stability for playlists and speedups
+        'noplaylist': False,
+        'ignoreerrors': True,
+        'retries': 10,
+        'fragment_retries': 10,
+        # Concurrent fragment downloads (CLI -N)
+        'concurrent_fragment_downloads': 5,
+        # Use aria2c for multi-connection downloads
+        'external_downloader': 'aria2c',
+        'external_downloader_args': {
+            'aria2c': ['-x', '16', '-s', '16', '-k', '1M']
+        },
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -439,11 +522,13 @@ def download_audio(url, audio_quality, config):
         print(f"{Fore.RED}Error downloading {url}: {str(e)}{Style.RESET_ALL}")
         return False
 
+# -------------------------------
 # Download advanced
+# -------------------------------
 def download_advanced(url, format_str, subtitles, thumbnails, metadata, config):
     if not check_ffmpeg():
         return False
-    
+
     # Determine if URL is a playlist
     with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'extract_flat': True}) as ydl:
         try:
@@ -452,15 +537,16 @@ def download_advanced(url, format_str, subtitles, thumbnails, metadata, config):
         except yt_dlp.DownloadError as e:
             print(f"{Fore.RED}Error: Invalid link {url} - {str(e)}{Style.RESET_ALL}")
             return False
-    
+
     if is_playlist:
         playlist_title = flat_info.get('title', 'Unknown Playlist')
-        num_videos = len(flat_info['entries'])
+        num_videos = len(flat_info.get('entries') or [])
         print(f"{Fore.BLUE}🎥 Playlist: {playlist_title}{Style.RESET_ALL}")
         print(f"{Fore.BLUE}📋 Number of videos: {num_videos}{Style.RESET_ALL}")
         if input(f"{Fore.CYAN}➤ Proceed with downloading playlist? (y/n): {Style.RESET_ALL}").strip().lower() != 'y':
             return False
-        output_path = VIDEO_DIR / "%(title)s.%(ext)s"
+        # Playlist folder + index prefix
+        output_path = VIDEO_DIR / "%(playlist_title)s" / "%(playlist_index)s %(title)s.%(ext)s"
         pbar = None
         video_count = 0
     else:
@@ -476,22 +562,21 @@ def download_advanced(url, format_str, subtitles, thumbnails, metadata, config):
             return False
         title = clean_filename(info['title'])
         output_path = VIDEO_DIR / f"{title}.%(ext)s"
-        
+
         if not show_pre_download_info(info, format_str, str(output_path), format_str):
             return False
         total_size_mb = (info.get('filesize') or info.get('filesize_approx') or 0) / (1024 * 1024)
         pbar = create_progress_bar(total_size_mb, title)
         video_count = 0
-    
+
     last_update = 0
     last_bytes = 0
     current_title = ""
-    
+
     def progress_hook(d):
         nonlocal pbar, last_update, last_bytes, current_title, video_count
         current_time = time.time()
         if d['status'] == 'downloading':
-            # Get current video title
             title = d.get('info_dict', {}).get('title', 'Unknown')
             total_size_mb = (d.get('info_dict', {}).get('filesize') or d.get('info_dict', {}).get('filesize_approx') or 0) / (1024 * 1024)
             if title != current_title:
@@ -501,29 +586,25 @@ def download_advanced(url, format_str, subtitles, thumbnails, metadata, config):
                 current_title = title
                 desc = f"Video {video_count}/{num_videos}: {title[:30]}" if is_playlist else title[:30]
                 pbar = create_progress_bar(total_size_mb, desc)
-            
-            # Update every 0.1 seconds
+
             if current_time - last_update >= 0.1:
-                # Strip ANSI codes from _percent_str
                 percent_str = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', d.get('_percent_str', '0%')).strip('%')
                 try:
                     percent = float(percent_str)
                 except ValueError:
                     percent = 0.0
-                # Calculate downloaded size in MiB
                 downloaded_bytes = d.get('downloaded_bytes', 0)
                 downloaded_mb = downloaded_bytes / (1024 * 1024)
-                # Calculate speed manually
                 time_delta = current_time - last_update if last_update else 0.1
                 speed_mb_s = (downloaded_bytes - last_bytes) / (1024 * 1024 * time_delta) if time_delta > 0 else 0.0
                 last_bytes = downloaded_bytes
                 last_update = current_time
-                # Update progress bar
+
                 if pbar and pbar.total > 0 and total_size_mb > 0:
                     pbar.n = downloaded_mb
                 elif pbar:
                     pbar.n = percent
-                # Update postfix with ETA and speed
+
                 eta = d.get('eta', 'Unknown')
                 eta_str = f"ETA {time.strftime('%M:%S', time.gmtime(eta))}" if eta != 'Unknown' else 'ETA Unknown'
                 if pbar:
@@ -552,7 +633,21 @@ def download_advanced(url, format_str, subtitles, thumbnails, metadata, config):
         'quiet': True,
         'no_warnings': True,
         'progress_hooks': [progress_hook],
-        'paths': {'home': str(VIDEO_DIR), 'temp': str(VIDEO_DIR)}
+        'paths': {'home': str(VIDEO_DIR), 'temp': str(VIDEO_DIR)},
+        # Stability for playlists and speedups
+        'noplaylist': False,
+        'ignoreerrors': True,
+        'retries': 10,
+        'fragment_retries': 10,
+        # Concurrent fragment downloads (CLI -N)
+        'concurrent_fragment_downloads': 5,
+        # Use aria2c for multi-connection downloads
+        'external_downloader': 'aria2c',
+        'external_downloader_args': {
+            'aria2c': ['-x', '16', '-s', '16', '-k', '1M']
+        },
+        # Optimize MP4 playback start
+        'postprocessor_args': ['-movflags', 'faststart'],
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -569,16 +664,16 @@ def main():
     links = get_links()
     if not links:
         return
-    
+
     download_type = choose_download_type(config)
-    
+
     if download_type == '1':
         quality = choose_video_quality(config)
     elif download_type == '2':
         audio_quality = choose_audio_quality(config)
     else:
         format_str, subtitles, thumbnails, metadata = choose_advanced_options(config)
-    
+
     successes = 0
     for url in links:
         print(f"{Fore.YELLOW}Processing: {url}{Style.RESET_ALL}")
@@ -590,7 +685,7 @@ def main():
         else:
             success = download_advanced(url, format_str, subtitles, thumbnails, metadata, config)
         successes += 1 if success else 0
-    
+
     print(f"{Fore.YELLOW}{'='*24}{Style.RESET_ALL}")
     print(f"{Fore.GREEN}Completed: {successes}/{len(links)} links downloaded successfully.{Style.RESET_ALL}")
 
