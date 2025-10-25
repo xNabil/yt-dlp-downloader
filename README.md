@@ -35,7 +35,7 @@ A simple, interactive, and user-friendly Python script to download YouTube video
   - install Aria2c
   - Prepare everything for you
   
-  > **Note:** You may still need to manually install FFmpeg and add it to your PATH if not fully automated by the script.
+  > **Note:** You may need to run the Setup.bat more then 3 times for complete installation.
 
 - **run.bat:**  
   Double-click to launch the downloader with one click.
