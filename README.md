@@ -46,7 +46,7 @@ You can control where your downloads and configuration file are stored by using 
 ```.env
 # Base directory for all downloads and config
 # Comment this out to use the defaults under your home directory
-BASE_DIR_PATH=C:\Users\YourUser\MyDownloads 
+DOWNLOAD_PATH=C:\Users\YourUser\MyDownloads 
 ```
 
 ---
